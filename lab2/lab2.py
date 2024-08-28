@@ -1,4 +1,4 @@
-import board, time, digitalio, adafruit_ssd1306, adafruit_mpl3115a2
+import board, time, digitalio, adafruit_ssd1306, adafruit_mpl3115a2, threading
 from PIL import Image, ImageDraw, ImageFont
 
 # sensor init
@@ -21,9 +21,23 @@ oled = adafruit_ssd1306.SSD1306_I2C(WIDTH, HEIGHT, i2c, addr=0x3C, reset=oled_re
 # Make sure to create image with mode '1' for 1-bit color.
 image = Image.new("1", (oled.width, oled.height))
 
-current = 1
+TIME_INTERVAL = 1.0
+timeSinceSwitch = 0.0
+deltaTime = 0.0
+last = time.monotonic()
+temp_display = True;
+exit_program = False
 
-while True:
+def listen_for_exit():
+    global exit_program
+    input("Press Enter to exit...\n")
+    exit_program = True
+
+# Start the thread to listen for the Enter key
+exit_thread = threading.Thread(target=listen_for_exit)
+exit_thread.start()
+
+while not exit_program:
     # Get drawing object to draw on image.
     draw = ImageDraw.Draw(image)
 
@@ -40,7 +54,17 @@ while True:
     # Load default font.
     font = ImageFont.load_default()
 
-    if current % 2 == 1:
+    now = time.monotonic()
+    deltaTime = now - last
+    last = now
+
+    timeSinceSwitch += deltaTime
+
+    if timeSinceSwitch > TIME_INTERVAL:
+        timeSinceSwitch = 0.0
+        temp_display = not temp_display
+
+    if temp_display:
         text = "{0:0.1f}°C".format(sensor.temperature)
     else:
         text = "{0:0.1f}hpa".format(sensor.pressure)
@@ -59,5 +83,7 @@ while True:
     oled.image(image)
     oled.show()
 
-    time.sleep(0.5)
-    current += 1
+
+print("Exiting program...")
+oled.fill(0)
+oled.show()
